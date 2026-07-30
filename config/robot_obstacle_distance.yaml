@@ -1,0 +1,11 @@
+# Robot Obstacle Distance Configuration File
+# Supports custom URDF models, mesh mappings, and kinematic chain settings
+
+obstacle_distance_node:
+  ros__parameters:
+    control_rate: 10.0
+    use_default_table_obstacle: true
+    urdf_path: "/home/dhcn-1/ros_ws/src/uet_ur3/ur3_moveit_control/urdf/ur3_with_susgrip.urdf.xacro"
+    mesh_dir: "/opt/ros/humble/share/ur_description/meshes/ur3e/collision"
+    base_link: "base_link"
+    tip_link: "tool0"
