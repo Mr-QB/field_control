@@ -5,13 +5,12 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    """Generate launch description for generic robot obstacle_distance_node."""
-    pkg_share = get_package_share_directory('field_control')
-    config_file = os.path.join(pkg_share, 'config', 'robot_obstacle_distance.yaml')
+    pkg_share = get_package_share_directory('obstacle_distance_calculator')
+    config_file = os.path.join(pkg_share, 'config', 'obstacle_distance.yaml')
 
     return LaunchDescription([
         Node(
-            package='field_control',
+            package='obstacle_distance_calculator',
             executable='obstacle_distance_node',
             name='obstacle_distance_node',
             output='screen',

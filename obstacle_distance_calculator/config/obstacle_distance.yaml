@@ -1,0 +1,8 @@
+obstacle_distance_node:
+  ros__parameters:
+    robot_description: "robot_description"
+    group_name: ""               # Empty means calculate distance for all robot links
+    output_topic: "obstacle_distances"
+    publish_frequency: 50.0      # Hz
+    distance_threshold: 0.3      # meters
+    use_unpadded_env: true
