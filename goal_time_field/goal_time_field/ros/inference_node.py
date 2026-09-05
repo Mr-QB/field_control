@@ -4,8 +4,8 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from obstacle_distance_msgs.msg import LinkObstacleDistanceArray
-from .model import GoalTimeField
-from .nominal import compute_nominal_velocity
+from ..core.model import GoalTimeField
+from ..core.nominal import compute_nominal_velocity
 
 
 class GoalTimeFieldNode(Node):

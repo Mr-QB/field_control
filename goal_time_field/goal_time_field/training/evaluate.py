@@ -4,8 +4,8 @@ import torch
 import yaml
 from torch.utils.data import DataLoader
 from .dataset import ClearanceDataset
-from .model import GoalTimeField
-from .speed_profile import speed
+from ..core.model import GoalTimeField
+from ..core.speed_profile import speed
 
 def main():
     p = argparse.ArgumentParser(); p.add_argument('--csv', required=True); p.add_argument('--metadata', required=True); p.add_argument('--checkpoint', required=True); p.add_argument('--samples', type=int, default=256); args=p.parse_args()

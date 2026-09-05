@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from .dataset import load_metadata
-from .model import GoalTimeField
+from ..core.model import GoalTimeField
 
 def main():
     p=argparse.ArgumentParser(); p.add_argument('--metadata',required=True); p.add_argument('--checkpoint',required=True); p.add_argument('--joint-x',default='shoulder_pan_joint'); p.add_argument('--joint-y',default='shoulder_lift_joint'); p.add_argument('--output',default='field_slice.png'); p.add_argument('--resolution',type=int,default=50); args=p.parse_args()

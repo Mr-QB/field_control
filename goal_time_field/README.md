@@ -10,6 +10,15 @@ its gradient is no longer guaranteed appropriate even though runtime speed uses
 the current clearance. The node only publishes nominal velocity. A future CBF
 layer must filter it into `qdot_safe`; this package never commands a robot.
 
+Source code is deliberately separated by responsibility:
+
+```text
+goal_time_field/
+├── core/       # Model, speed mapping, nominal-velocity calculation; no ROS or dataset I/O
+├── training/   # CSV dataset, PDE training, evaluation and slice visualization
+└── ros/        # inference_node.py: checkpoint + ROS topics only
+```
+
 ```bash
 source ~/ros_ws/install/setup.bash
 # Start obstacle_sim.launch.py first, then generate a fixed-scene dataset.
