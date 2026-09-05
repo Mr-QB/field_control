@@ -1,6 +1,10 @@
 obstacle_distance_node:
   ros__parameters:
-    robot_description: "robot_description"
+    # Name of the parameter/topic containing URDF XML, not the XML itself.
+    robot_description_parameter: "robot_description"
+    planning_scene_topic: "/monitored_planning_scene"
+    # Empty disables the initial scene service request.
+    planning_scene_service: "/get_planning_scene"
     group_name: ""               # Empty means calculate distance for all robot links
     output_topic: "obstacle_distances"
     publish_frequency: 50.0      # Hz

@@ -58,6 +58,10 @@ ament_target_dependencies(obstacle_distance_node
   obstacle_distance_msgs
 )
 
+
+
+
+
 # Install Targets
 install(TARGETS distance_calculator_lib obstacle_distance_node
   ARCHIVE DESTINATION lib
@@ -73,6 +77,10 @@ install(DIRECTORY include/
 # Install Config & Launch Files
 install(DIRECTORY config launch
   DESTINATION share/${PROJECT_NAME}
+)
+
+install(PROGRAMS scripts/random_obstacles.py
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 ament_package()

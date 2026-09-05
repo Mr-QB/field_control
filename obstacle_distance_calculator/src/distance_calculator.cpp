@@ -9,10 +9,8 @@ DistanceSummary DistanceCalculator::compute(
   const CalculatorOptions & options)
 {
   DistanceSummary summary;
-  if (!scene) {
-    return summary;
-  }
 
+  // Yêu cầu MoveIt trả về khoảng cách, hai điểm gần nhất và vector pháp tuyến.
   collision_detection::DistanceRequest req;
   req.enable_nearest_points = true;
   req.enable_signed_distance = true;
@@ -22,98 +20,51 @@ DistanceSummary DistanceCalculator::compute(
   req.acm = &scene->getAllowedCollisionMatrix();
 
   if (!options.group_name.empty()) {
+    // Nếu có group_name, chỉ xét các link thuộc nhóm đó.
     req.group_name = options.group_name;
     req.enableGroup(scene->getRobotModel());
   }
 
-  collision_detection::DistanceResult res;
+  // Chọn collision environment có hoặc không có padding tùy cấu hình.
   const auto & env = options.use_unpadded_env ?
     scene->getCollisionEnvUnpadded() :
     scene->getCollisionEnv();
-
-  if (!env) {
-    return summary;
-  }
-
+  collision_detection::DistanceResult res;
   env->distanceRobot(req, res, robot_state);
 
-  const auto & robot_model = scene->getRobotModel();
-
+  // Mỗi entry là một cặp body nằm trong khoảng distance_threshold.
   for (const auto & entry : res.distances) {
     for (const auto & dist_data : entry.second) {
-      if (dist_data.distance > options.distance_threshold) {
-        continue;
-      }
-
-      std::string link_name;
-      std::string obstacle_id;
-      Eigen::Vector3d pt_link;
-      Eigen::Vector3d pt_obs;
-      Eigen::Vector3d normal_vec;
-
-      bool is_0_link = robot_model && robot_model->hasLinkModel(dist_data.link_names[0]);
-      bool is_1_link = robot_model && robot_model->hasLinkModel(dist_data.link_names[1]);
-
-      if (is_0_link && !is_1_link) {
-        link_name = dist_data.link_names[0];
-        obstacle_id = dist_data.link_names[1];
-        pt_link = dist_data.nearest_points[0];
-        pt_obs = dist_data.nearest_points[1];
-        normal_vec = dist_data.normal;
-      } else if (is_1_link && !is_0_link) {
-        link_name = dist_data.link_names[1];
-        obstacle_id = dist_data.link_names[0];
-        pt_link = dist_data.nearest_points[1];
-        pt_obs = dist_data.nearest_points[0];
-        normal_vec = -dist_data.normal;  // Flip vector to point link -> obstacle
-      } else if (
+      // Xác định body nào trong cặp là robot. Body còn lại là obstacle.
+      const bool robot_is_first =
         dist_data.body_types[0] == collision_detection::BodyTypes::ROBOT_LINK ||
-        dist_data.body_types[0] == collision_detection::BodyTypes::ROBOT_ATTACHED)
-      {
-        link_name = dist_data.link_names[0];
-        obstacle_id = dist_data.link_names[1];
-        pt_link = dist_data.nearest_points[0];
-        pt_obs = dist_data.nearest_points[1];
-        normal_vec = dist_data.normal;
-      } else if (
+        dist_data.body_types[0] == collision_detection::BodyTypes::ROBOT_ATTACHED;
+      const bool robot_is_second =
         dist_data.body_types[1] == collision_detection::BodyTypes::ROBOT_LINK ||
-        dist_data.body_types[1] == collision_detection::BodyTypes::ROBOT_ATTACHED)
-      {
-        link_name = dist_data.link_names[1];
-        obstacle_id = dist_data.link_names[0];
-        pt_link = dist_data.nearest_points[1];
-        pt_obs = dist_data.nearest_points[0];
-        normal_vec = -dist_data.normal;
-      } else {
+        dist_data.body_types[1] == collision_detection::BodyTypes::ROBOT_ATTACHED;
+      if (!robot_is_first && !robot_is_second) {
         continue;
-      }
-
-      // Ensure normal vector is normalized and valid
-      if (normal_vec.norm() < 1e-6) {
-        Eigen::Vector3d diff = pt_obs - pt_link;
-        if (diff.norm() > 1e-6) {
-          normal_vec = diff.normalized();
-        } else {
-          normal_vec.setZero();
-        }
-      } else {
-        normal_vec.normalize();
       }
 
       DistanceItem item;
-      item.link_name = link_name;
-      item.obstacle_id = obstacle_id;
+      // Đổi chỉ số để dữ liệu đầu ra luôn theo thứ tự: robot -> obstacle.
+      const auto link_index = robot_is_first ? 0 : 1;
+      const auto obstacle_index = robot_is_first ? 1 : 0;
+      item.link_name = dist_data.link_names[link_index];
+      item.obstacle_id = dist_data.link_names[obstacle_index];
       item.distance = dist_data.distance;
-      item.point_on_link = pt_link;
-      item.point_on_obstacle = pt_obs;
-      item.normal = normal_vec;
+      item.point_on_link = dist_data.nearest_points[link_index];
+      item.point_on_obstacle = dist_data.nearest_points[obstacle_index];
+      // Đảo chiều normal khi robot nằm ở body thứ hai để nó luôn chỉ từ link sang obstacle.
+      item.normal = robot_is_first ? dist_data.normal : -dist_data.normal;
 
       summary.items.push_back(item);
 
       if (dist_data.distance < summary.overall_min_distance) {
+        // Lưu lại cặp gần nhất trong tất cả các cặp đã tính.
         summary.overall_min_distance = dist_data.distance;
-        summary.overall_closest_link = link_name;
-        summary.overall_closest_obstacle = obstacle_id;
+        summary.overall_closest_link = item.link_name;
+        summary.overall_closest_obstacle = item.obstacle_id;
       }
     }
   }

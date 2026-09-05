@@ -1,17 +1,37 @@
 #include "obstacle_distance_calculator/obstacle_distance_node.hpp"
 
+#include <cmath>
+#include <stdexcept>
+
 namespace obstacle_distance_calculator
 {
+namespace
+{
+template<typename T>
+T read_parameter(rclcpp::Node & node, const std::string & name, const T & default_value)
+{
+  if (!node.has_parameter(name)) {
+    return node.declare_parameter<T>(name, default_value);
+  }
+  return node.get_parameter(name).get_value<T>();
+}
+}  // namespace
 
 ObstacleDistanceNode::ObstacleDistanceNode(const rclcpp::NodeOptions & options)
 : Node("obstacle_distance_node", options)
 {
-  robot_description_ = declare_parameter<std::string>("robot_description", "robot_description");
-  group_name_ = declare_parameter<std::string>("group_name", "");
-  output_topic_ = declare_parameter<std::string>("output_topic", "obstacle_distances");
-  publish_frequency_ = declare_parameter<double>("publish_frequency", 50.0);
-  distance_threshold_ = declare_parameter<double>("distance_threshold", 0.3);
-  use_unpadded_env_ = declare_parameter<bool>("use_unpadded_env", true);
+  robot_description_ = read_parameter<std::string>(*this, "robot_description_parameter", "robot_description");
+  group_name_ = read_parameter<std::string>(*this, "group_name", "");
+  output_topic_ = read_parameter<std::string>(*this, "output_topic", "obstacle_distances");
+  publish_frequency_ = read_parameter<double>(*this, "publish_frequency", 50.0);
+  distance_threshold_ = read_parameter<double>(*this, "distance_threshold", 0.3);
+  use_unpadded_env_ = read_parameter<bool>(*this, "use_unpadded_env", true);
+
+  if (!std::isfinite(publish_frequency_) || publish_frequency_ <= 0.0 ||
+    !std::isfinite(distance_threshold_) || distance_threshold_ < 0.0)
+  {
+    throw std::invalid_argument("publish_frequency must be positive and distance_threshold nonnegative, both finite");
+  }
 
   distance_pub_ = create_publisher<obstacle_distance_msgs::msg::LinkObstacleDistanceArray>(
     output_topic_, 10);
@@ -25,16 +45,25 @@ void ObstacleDistanceNode::init()
   if (psm_->getPlanningScene()) {
     psm_->startStateMonitor();
     psm_->startWorldGeometryMonitor();
-    psm_->startSceneMonitor();
+    const auto scene_topic = read_parameter<std::string>(
+      *this, "planning_scene_topic", "/monitored_planning_scene");
+    const auto scene_service = read_parameter<std::string>(
+      *this, "planning_scene_service", "/get_planning_scene");
+    psm_->startSceneMonitor(scene_topic);
+    if (!scene_service.empty() && !psm_->requestPlanningSceneState(scene_service)) {
+      RCLCPP_WARN(get_logger(), "Could not fetch initial scene from '%s'; waiting for scene updates.",
+        scene_service.c_str());
+    }
     RCLCPP_INFO(get_logger(), "PlanningSceneMonitor initialized successfully.");
   } else {
     RCLCPP_ERROR(
       get_logger(),
       "Failed to initialize PlanningSceneMonitor. Check parameter '%s'.",
       robot_description_.c_str());
+    throw std::runtime_error("PlanningSceneMonitor initialization failed");
   }
 
-  auto period = std::chrono::duration<double>(1.0 / std::max(1.0, publish_frequency_));
+  auto period = std::chrono::duration<double>(1.0 / publish_frequency_);
   timer_ = create_wall_timer(period, std::bind(&ObstacleDistanceNode::timer_callback, this));
 }
 
