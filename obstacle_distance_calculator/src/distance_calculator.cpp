@@ -9,6 +9,7 @@ DistanceSummary DistanceCalculator::compute(
   const CalculatorOptions & options)
 {
   DistanceSummary summary;
+  summary.overall_min_distance = std::numeric_limits<double>::infinity();
 
   // Yêu cầu MoveIt trả về khoảng cách, hai điểm gần nhất và vector pháp tuyến.
   collision_detection::DistanceRequest req;
@@ -35,6 +36,11 @@ DistanceSummary DistanceCalculator::compute(
   // Mỗi entry là một cặp body nằm trong khoảng distance_threshold.
   for (const auto & entry : res.distances) {
     for (const auto & dist_data : entry.second) {
+      // MoveIt/FCL may leave placeholder entries for unsupported body pairs.
+      // They contain denormal garbage (around 1e-310), not a physical distance.
+      if (!std::isfinite(dist_data.distance) || std::abs(dist_data.distance) < 1e-100) {
+        continue;
+      }
       // Xác định body nào trong cặp là robot. Body còn lại là obstacle.
       const bool robot_is_first =
         dist_data.body_types[0] == collision_detection::BodyTypes::ROBOT_LINK ||

@@ -38,6 +38,14 @@ add_executable(obstacle_distance_node
   src/main.cpp
 )
 
+add_executable(field_dataset_generator src/field_dataset_generator.cpp)
+target_include_directories(field_dataset_generator PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(field_dataset_generator distance_calculator_lib)
+ament_target_dependencies(field_dataset_generator rclcpp moveit_core moveit_ros_planning)
+
 target_include_directories(obstacle_distance_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
@@ -63,7 +71,7 @@ ament_target_dependencies(obstacle_distance_node
 
 
 # Install Targets
-install(TARGETS distance_calculator_lib obstacle_distance_node
+install(TARGETS distance_calculator_lib obstacle_distance_node field_dataset_generator
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}

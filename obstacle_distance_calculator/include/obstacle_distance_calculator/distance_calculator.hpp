@@ -34,7 +34,7 @@ struct DistanceSummary
 
 struct CalculatorOptions
 {
-  double distance_threshold{0.3};
+  double distance_threshold{0.5};
   std::string group_name{""};
   bool use_unpadded_env{true};
 };

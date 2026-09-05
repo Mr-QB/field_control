@@ -1,0 +1,21 @@
+training:
+  epochs: 300
+  batch_size: 1024
+  learning_rate: 0.001
+  lambda_bc: 10.0
+  grad_clip: 5.0
+  seed: 42
+  near_lambda: 4.0
+  near_sigma: 0.10
+model:
+  hidden_dim: 256
+  hidden_layers: 4
+goal_sampling:
+  goal_clearance_min: 0.10
+speed_profile:
+  s_min: 0.05
+  s_max: 1.0
+  d_near: 0.03
+  d_free: 0.30
+inference:
+  qdot_max: 1.0

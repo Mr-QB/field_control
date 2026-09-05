@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>goal_time_field</name><version>0.1.0</version>
+  <description>Goal-conditioned time field for one fixed MoveIt planning scene.</description>
+  <maintainer email="qbao1607@gmail.com">dhcn-1</maintainer><license>Apache-2.0</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>rclpy</exec_depend><exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>obstacle_distance_msgs</exec_depend>
+  <export><build_type>ament_python</build_type></export>
+</package>
