@@ -11,40 +11,91 @@ from ..core.speed_profile import speed
 
 
 def load_config(path):
-    with open(path, encoding='utf-8') as file: return yaml.safe_load(file)
+    with open(path, encoding='utf-8') as file:
+        return yaml.safe_load(file)
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--csv', required=True); parser.add_argument('--metadata', required=True)
-    parser.add_argument('--config', required=True); parser.add_argument('--checkpoint', required=True)
-    args = parser.parse_args(); cfg = load_config(args.config); tr = cfg['training']
-    random.seed(tr['seed']); np.random.seed(tr['seed']); torch.manual_seed(tr['seed'])
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    data = ClearanceDataset(args.csv, args.metadata); meta = data.metadata
-    goals = torch.where(data.clearance >= cfg['goal_sampling']['goal_clearance_min'])[0]
-    if len(goals) == 0: raise ValueError('No goal meets goal_clearance_min')
-    loader = DataLoader(data, batch_size=tr['batch_size'], sampler=data.sampler(tr['near_lambda'], tr['near_sigma']))
-    model = GoalTimeField(meta['lower_bounds'], meta['upper_bounds'], **cfg['model']).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=tr['learning_rate'])
-    for epoch in range(1, tr['epochs'] + 1):
-        model.train(); total = 0.0
-        for q, clearance in loader:
-            q, clearance = q.to(device).requires_grad_(True), clearance.to(device)
-            indices = goals[torch.randint(len(goals), (len(q),))]
-            q_goal = data.q[indices].to(device)
-            value = model(q, q_goal)
-            grad = torch.autograd.grad(value.sum(), q, create_graph=True)[0]
-            pde = ((speed(clearance, cfg['speed_profile']) * torch.linalg.vector_norm(grad, dim=-1) - 1.0) ** 2).mean()
-            bc = model(q_goal, q_goal).square().mean()
-            loss = pde + tr['lambda_bc'] * bc
-            optimizer.zero_grad(); loss.backward(); torch.nn.utils.clip_grad_norm_(model.parameters(), tr['grad_clip']); optimizer.step()
-            total += loss.item()
-        print(f'epoch {epoch:04d} loss={total / len(loader):.6f} device={device}')
-    Path(args.checkpoint).parent.mkdir(parents=True, exist_ok=True)
-    torch.save({'model_state_dict': model.state_dict(), 'joint_names': meta['joint_names'],
-                'joint_lower_bounds': meta['lower_bounds'], 'joint_upper_bounds': meta['upper_bounds'],
-                'speed_profile': cfg['speed_profile'], 'model_parameters': cfg['model'],
-                'training_epoch': tr['epochs'], 'training_loss': total / len(loader)}, args.checkpoint)
+    parser = argparse.ArgumentParser(description='Train a Goal Time Field model.')
+    parser.add_argument('--csv', required=True, help='Dataset generated for the fixed obstacle scene.')
+    parser.add_argument('--metadata', required=True, help='Joint names and limits for the dataset.')
+    parser.add_argument('--config', required=True, help='Training YAML configuration.')
+    parser.add_argument('--checkpoint', required=True, help='Where to save the trained model.')
+    args = parser.parse_args()
 
-if __name__ == '__main__': main()
+    config = load_config(args.config)
+    training_config = config['training']
+    random.seed(training_config['seed'])
+    np.random.seed(training_config['seed'])
+    torch.manual_seed(training_config['seed'])
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    dataset = ClearanceDataset(args.csv, args.metadata)
+    metadata = dataset.metadata
+    goal_indices = torch.where(
+        dataset.clearance >= config['goal_sampling']['goal_clearance_min']
+    )[0]
+    if len(goal_indices) == 0:
+        raise ValueError('No goal meets goal_clearance_min')
+
+    loader = DataLoader(
+        dataset,
+        batch_size=training_config['batch_size'],
+        sampler=dataset.sampler(training_config['near_lambda'], training_config['near_sigma']),
+    )
+    model = GoalTimeField(
+        metadata['lower_bounds'], metadata['upper_bounds'], **config['model']
+    ).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=training_config['learning_rate'])
+
+    for epoch in range(1, training_config['epochs'] + 1):
+        model.train()
+        total_loss = 0.0
+        for current_joints, clearance in loader:
+            current_joints = current_joints.to(device).requires_grad_(True)
+            clearance = clearance.to(device)
+
+            # Pick one safe goal for each input configuration in this batch.
+            random_goal_rows = goal_indices[torch.randint(len(goal_indices), (len(current_joints),))]
+            goal_joints = dataset.q[random_goal_rows].to(device)
+
+            predicted_time = model(current_joints, goal_joints)
+            time_gradient = torch.autograd.grad(
+                predicted_time.sum(), current_joints, create_graph=True
+            )[0]
+
+            # Eikonal PDE: speed(clearance) * ||dT/dq|| should equal one.
+            gradient_length = torch.linalg.vector_norm(time_gradient, dim=-1)
+            pde_loss = (
+                speed(clearance, config['speed_profile']) * gradient_length - 1.0
+            ).square().mean()
+
+            # The model architecture already enforces this, but keep the loss
+            # explicit so the training objective remains easy to understand.
+            boundary_loss = model(goal_joints, goal_joints).square().mean()
+            loss = pde_loss + training_config['lambda_bc'] * boundary_loss
+
+            optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), training_config['grad_clip'])
+            optimizer.step()
+            total_loss += loss.item()
+
+        average_loss = total_loss / len(loader)
+        print(f'epoch {epoch:04d} loss={average_loss:.6f} device={device}')
+
+    Path(args.checkpoint).parent.mkdir(parents=True, exist_ok=True)
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'joint_names': metadata['joint_names'],
+        'joint_lower_bounds': metadata['lower_bounds'],
+        'joint_upper_bounds': metadata['upper_bounds'],
+        'speed_profile': config['speed_profile'],
+        'model_parameters': config['model'],
+        'training_epoch': training_config['epochs'],
+        'training_loss': average_loss,
+    }, args.checkpoint)
+
+if __name__ == '__main__':
+    main()

@@ -8,17 +8,68 @@ from ..core.model import GoalTimeField
 from ..core.speed_profile import speed
 
 def main():
-    p = argparse.ArgumentParser(); p.add_argument('--csv', required=True); p.add_argument('--metadata', required=True); p.add_argument('--checkpoint', required=True); p.add_argument('--samples', type=int, default=256); args=p.parse_args()
-    ckpt=torch.load(args.checkpoint, map_location='cpu'); data=ClearanceDataset(args.csv,args.metadata); model=GoalTimeField(ckpt['joint_lower_bounds'],ckpt['joint_upper_bounds'],**ckpt['model_parameters']); model.load_state_dict(ckpt['model_state_dict']); model.eval()
-    q,d=next(iter(DataLoader(data,batch_size=min(args.samples,len(data))))); q=q.requires_grad_(True); goal=data.q[0].expand_as(q); value=model(q,goal); grad=torch.autograd.grad(value.sum(),q)[0]; residual=torch.abs(speed(d,ckpt['speed_profile'])*torch.linalg.vector_norm(grad,dim=-1)-1)
-    finite=torch.isfinite(value).all() and torch.isfinite(grad).all(); boundary=model(goal[:1],goal[:1]).item()
-    print(f'finite={finite} pde_mean={residual.mean():.6f} pde_median={residual.median():.6f} pde_p95={torch.quantile(residual,.95):.6f} boundary_error={boundary:.6e}')
-    print(f'gradient_norm mean={torch.linalg.vector_norm(grad,dim=-1).mean():.6f} min={torch.linalg.vector_norm(grad,dim=-1).min():.6f} max={torch.linalg.vector_norm(grad,dim=-1).max():.6f}')
+    parser = argparse.ArgumentParser(description='Evaluate a Goal Time Field checkpoint.')
+    parser.add_argument('--csv', required=True)
+    parser.add_argument('--metadata', required=True)
+    parser.add_argument('--checkpoint', required=True)
+    parser.add_argument('--samples', type=int, default=256)
+    args = parser.parse_args()
+
+    checkpoint = torch.load(args.checkpoint, map_location='cpu')
+    dataset = ClearanceDataset(args.csv, args.metadata)
+    model = GoalTimeField(
+        checkpoint['joint_lower_bounds'], checkpoint['joint_upper_bounds'],
+        **checkpoint['model_parameters'],
+    )
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model.eval()
+
+    current_joints, clearance = next(iter(DataLoader(
+        dataset, batch_size=min(args.samples, len(dataset))
+    )))
+    current_joints = current_joints.requires_grad_(True)
+    goal_joints = dataset.q[0].expand_as(current_joints)
+    predicted_time = model(current_joints, goal_joints)
+    time_gradient = torch.autograd.grad(predicted_time.sum(), current_joints)[0]
+
+    gradient_length = torch.linalg.vector_norm(time_gradient, dim=-1)
+    pde_residual = torch.abs(
+        speed(clearance, checkpoint['speed_profile']) * gradient_length - 1
+    )
+    finite_values = torch.isfinite(predicted_time).all() and torch.isfinite(time_gradient).all()
+    boundary_error = model(goal_joints[:1], goal_joints[:1]).item()
+
+    print(
+        f'finite={finite_values} pde_mean={pde_residual.mean():.6f} '
+        f'pde_median={pde_residual.median():.6f} '
+        f'pde_p95={torch.quantile(pde_residual, .95):.6f} '
+        f'boundary_error={boundary_error:.6e}'
+    )
+    print(
+        f'gradient_norm mean={gradient_length.mean():.6f} '
+        f'min={gradient_length.min():.6f} max={gradient_length.max():.6f}'
+    )
     # Central finite difference check of dT/dq for a few configurations.
-    h=1e-4; errors=[]
-    for i in range(min(5,len(q))):
-        for j in range(q.shape[1]):
-            plus=q[i:i+1].detach().clone(); minus=plus.clone(); plus[0,j]+=h; minus[0,j]-=h
-            fd=(model(plus,goal[i:i+1])-model(minus,goal[i:i+1])).item()/(2*h); errors.append(abs(fd-grad[i,j].item()))
-    print(f'finite_difference_abs_error mean={np.mean(errors):.6e} max={np.max(errors):.6e}')
-if __name__ == '__main__': main()
+    step_size = 1e-4
+    finite_difference_errors = []
+    for row_index in range(min(5, len(current_joints))):
+        for joint_index in range(current_joints.shape[1]):
+            plus = current_joints[row_index:row_index + 1].detach().clone()
+            minus = plus.clone()
+            plus[0, joint_index] += step_size
+            minus[0, joint_index] -= step_size
+            finite_difference = (
+                model(plus, goal_joints[row_index:row_index + 1])
+                - model(minus, goal_joints[row_index:row_index + 1])
+            ).item() / (2 * step_size)
+            finite_difference_errors.append(
+                abs(finite_difference - time_gradient[row_index, joint_index].item())
+            )
+    print(
+        f'finite_difference_abs_error mean={np.mean(finite_difference_errors):.6e} '
+        f'max={np.max(finite_difference_errors):.6e}'
+    )
+
+
+if __name__ == '__main__':
+    main()
