@@ -45,7 +45,14 @@ public:
   DistanceCalculator() = default;
   ~DistanceCalculator() = default;
 
-  /// Calculate robot-to-world distances from PlanningScene and RobotState
+  /// Calculate robot-to-world clearance from PlanningScene and RobotState.
+  ///
+  /// Positive = separated, zero = touching, negative = overlap (meters).
+  /// Mesh/sphere pairs use signed centre-to-mesh distance minus sphere radius;
+  /// other shapes use MoveIt's signed distance backend. Containment assumes
+  /// closed meshes. Points and normals are expressed in the planning frame.
+  /// If no pair is within distance_threshold, minimum is +infinity and names
+  /// are empty. Self-collision is outside this calculator's scope.
   static DistanceSummary compute(
     const planning_scene::PlanningSceneConstPtr & scene,
     const moveit::core::RobotState & robot_state,

@@ -7,6 +7,15 @@ Visualization Manager:
     Fixed Frame: base_link
     Background Color: 48; 48; 48
     Frame Rate: 30
+  # RViz activates the first tool in this list when the config is loaded.
+  # Put MoveCamera first so left-button drag always controls the camera.
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
   Displays:
     - Class: rviz_default_plugins/Grid
       Name: Grid
@@ -22,8 +31,10 @@ Visualization Manager:
         Scene Alpha: 0.85
       Scene Robot:
         Robot Alpha: 1
-        Show Robot Visual: true
-        Show Robot Collision: false
+        # Match the geometry used by FCL/checkRobotCollision.  Visual meshes
+        # can differ in size and make a real collision look "too early".
+        Show Robot Visual: false
+        Show Robot Collision: true
   Views:
     Current:
       Class: rviz_default_plugins/Orbit

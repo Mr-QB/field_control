@@ -24,6 +24,7 @@ target_include_directories(distance_calculator_lib PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
+target_compile_features(distance_calculator_lib PUBLIC cxx_std_17)
 
 ament_target_dependencies(distance_calculator_lib
   rclcpp
@@ -90,5 +91,15 @@ install(DIRECTORY config launch
 install(PROGRAMS scripts/random_obstacles.py
   DESTINATION lib/${PROJECT_NAME}
 )
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_distance_calculator test/test_distance_calculator.cpp)
+  target_link_libraries(test_distance_calculator distance_calculator_lib)
+  ament_target_dependencies(test_distance_calculator moveit_core moveit_ros_planning)
+  add_executable(distance_snapshot_check test/distance_snapshot_check.cpp)
+  target_link_libraries(distance_snapshot_check distance_calculator_lib)
+  ament_target_dependencies(distance_snapshot_check rclcpp moveit_core moveit_ros_planning)
+endif()
 
 ament_package()

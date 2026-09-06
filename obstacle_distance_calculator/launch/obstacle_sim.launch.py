@@ -79,8 +79,10 @@ def generate_launch_description():
     defaults = {
         'ur_type': 'ur3', 'rviz': 'true', 'joint_gui': 'true',
         'randomize': 'false', 'count': '5', 'seed': '-1', 'radius_min': '0.04', 'radius_max': '0.10',
-        'x_min': '-0.55', 'x_max': '0.55', 'y_min': '-0.55', 'y_max': '0.55',
-        'z_min': '0.15', 'z_max': '0.75',
+        # Bounds used only with randomize:=true.  Keep samples near the arm's
+        # working volume so generated scenes are challenging as well.
+        'x_min': '-0.35', 'x_max': '0.45', 'y_min': '-0.35', 'y_max': '0.35',
+        'z_min': '0.22', 'z_max': '0.65',
     }
     return LaunchDescription([
         DeclareLaunchArgument(name, default_value=value) for name, value in defaults.items()
